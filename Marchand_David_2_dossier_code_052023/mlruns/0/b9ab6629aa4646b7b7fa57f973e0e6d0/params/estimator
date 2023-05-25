@@ -1,0 +1,1 @@
+Pipeline(steps=[('smote', SMOTE(random_state=42)), ('lgbm', LGBMClassifier())])

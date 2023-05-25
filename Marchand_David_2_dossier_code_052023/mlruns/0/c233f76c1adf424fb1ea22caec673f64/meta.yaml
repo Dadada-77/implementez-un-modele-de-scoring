@@ -1,0 +1,15 @@
+artifact_uri: file:///home/david/Documents/FINAL_PROJET_7/mlruns/0/c233f76c1adf424fb1ea22caec673f64/artifacts
+end_time: 1684696250774
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: c233f76c1adf424fb1ea22caec673f64
+run_name: judicious-skink-591
+run_uuid: c233f76c1adf424fb1ea22caec673f64
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1684688436579
+status: 3
+tags: []
+user_id: david

@@ -1,0 +1,15 @@
+artifact_uri: file:///home/david/Documents/FINAL_PROJET_7/mlruns/0/7c1ee7f454e24b7490b3d620b3242f55/artifacts
+end_time: 1684687020118
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: 7c1ee7f454e24b7490b3d620b3242f55
+run_name: delightful-steed-61
+run_uuid: 7c1ee7f454e24b7490b3d620b3242f55
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1684681559933
+status: 3
+tags: []
+user_id: david

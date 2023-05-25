@@ -1,0 +1,1 @@
+{'business_loss': make_scorer(business_cost, greater_is_better=False, needs_proba=True), 'fbeta_loss': make_scorer(fbeta_cost, needs_proba=True)}

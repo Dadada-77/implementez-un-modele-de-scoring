@@ -1,0 +1,15 @@
+artifact_uri: file:///home/david/Documents/FINAL_PROJET_7/mlruns/0/bc38adbe64974807a2e5807c4eb99b94/artifacts
+end_time: 1684696250774
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: bc38adbe64974807a2e5807c4eb99b94
+run_name: silent-stork-98
+run_uuid: bc38adbe64974807a2e5807c4eb99b94
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1684688436579
+status: 3
+tags: []
+user_id: david

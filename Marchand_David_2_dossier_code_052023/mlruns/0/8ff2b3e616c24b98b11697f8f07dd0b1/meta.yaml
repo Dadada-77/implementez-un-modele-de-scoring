@@ -1,0 +1,15 @@
+artifact_uri: file:///home/david/Documents/FINAL_PROJET_7/mlruns/0/8ff2b3e616c24b98b11697f8f07dd0b1/artifacts
+end_time: 1684687020118
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: 8ff2b3e616c24b98b11697f8f07dd0b1
+run_name: delightful-shrew-302
+run_uuid: 8ff2b3e616c24b98b11697f8f07dd0b1
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1684681559933
+status: 3
+tags: []
+user_id: david

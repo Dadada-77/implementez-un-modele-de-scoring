@@ -1,0 +1,15 @@
+artifact_uri: file:///home/david/Documents/FINAL_PROJET_7/mlruns/0/b9ab6629aa4646b7b7fa57f973e0e6d0/artifacts
+end_time: 1684696325833
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: b9ab6629aa4646b7b7fa57f973e0e6d0
+run_name: resilient-roo-651
+run_uuid: b9ab6629aa4646b7b7fa57f973e0e6d0
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1684688436579
+status: 3
+tags: []
+user_id: david
