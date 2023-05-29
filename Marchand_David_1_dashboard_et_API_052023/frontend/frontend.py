@@ -4,6 +4,7 @@ import streamlit.components.v1 as html
 import hydralit_components as hc
 import plotly.figure_factory as ff
 import matplotlib.pyplot as plt
+import seaborn as sns
 from bytesbufio import BytesBufferIO as BytesIO
 from PIL import Image
 import numpy as np
@@ -19,6 +20,7 @@ import random
 from math import exp
 from math import pi
 import shap
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
 st.set_page_config(layout="wide")
 st.set_option('deprecation.showPyplotGlobalUse', False)
@@ -30,7 +32,11 @@ SHARED_PATH = "../shared/"
 ID_COLUMN_NAME = "SK_ID_CURR"
 
 # Constante à passer à True pour une instance de l'API en local ; False dans le cas d'un conteneur Docker
-LOCAL_DEBUG = False
+LOCAL_DEBUG = True
+
+# Constantes prévues pour le traitement de l'état de la prédiction
+TP, TN, FP, FN = ('tp', 'tn', 'fp', 'fn')
+colors_states = {TP : '#68DC8F', TN : '#D66577', FP : '#E9DC8E', FN : '#D6AA77'}
 
 # Boutons princpaux de Streamlit à cacher pour conserver une interface épurée
 hide_st_style = """
@@ -165,7 +171,7 @@ def send_to_api(endpoint, specific_request_type, input_data, response_format):
     else:
         return received.text
 
-def draw_decision_bars(input_features, input_counter, input_dict):
+def draw_decision_bars(input_features, input_counter, input_df, input_client_df):
     """ Dessine un ensemble de barres par variable, reflétant l'état de prédiction du client par variable """
     override_theme_1 = {'content_color': '#68DC8F', 'progress_color' : '#68DC8F'}
     override_theme_2 = {'content_color': '#E9DC8E', 'progress_color' : '#E9DC8E'}
@@ -173,19 +179,21 @@ def draw_decision_bars(input_features, input_counter, input_dict):
     override_theme_4 = {'content_color': '#D66577', 'progress_color' : '#D66577'}
 
     for feature in (input_features):
-        if(input_dict["VARIABLE"]["STATE"][feature] == "tp"):
+        fig, state_dict, start, end = draw_histogram_state_graph(input_df, feature, input_client_df)
+    
+        if(state_dict[feature] == "tp"):
             feature_override_theme = override_theme_1
             bar_size = 100
             state_str = "TP, " + str(feature)
-        elif(input_dict["VARIABLE"]["STATE"][feature] == "fp"):
+        elif(state_dict[feature] == "fp"):
             feature_override_theme = override_theme_2
             bar_size = 75
             state_str = "FP, " + str(feature)
-        elif(input_dict["VARIABLE"]["STATE"][feature] == "fn"):
+        elif(state_dict[feature] == "fn"):
             feature_override_theme = override_theme_3
             bar_size = 50
             state_str = "FN, " + str(feature)
-        elif(input_dict["VARIABLE"]["STATE"][feature] == "tn"):
+        elif(state_dict[feature] == "tn"):
             feature_override_theme = override_theme_4
             bar_size = 25
             state_str = "TN, " + str(feature)
@@ -194,49 +202,44 @@ def draw_decision_bars(input_features, input_counter, input_dict):
         input_counter+=1
     return input_counter
 
-def compute_mean_color(input_states):
-    """ Renvoi de la couleur correspondant à l'état principal retrouvé dans la liste fournie en entrée """
-    max_value = max(input_states, key=input_states.get)
-    color_dict = {'tp' : '#68DC8F', 'tn' : '#D66577', 'fp' : '#E9DC8E', 'fn' : '#D6AA77'}
-    return color_dict[max_value]
-
-def return_radar_plot_values(input_features, input_dict):
+def return_radar_plot_values(input_features, input_df, input_client_df):
     """ Renvoie une liste composée des valeurs et de la couleur majoritaire à fournir pour la fonction draw_radar_plot """
     output_values = {}
-    states_dict = {"tp" : 0, "tn" : 0, "fp" : 0, "fn" : 0}
     values_dict = {"tp" : 4, "tn" : 1, "fp" : 3, "fn" : 2}
     for feature in (input_features):
-        states_dict[input_dict["VARIABLE"]["STATE"][feature]] += 1
-        output_values[feature] = values_dict[input_dict["VARIABLE"]["STATE"][feature]]
-    output_color = compute_mean_color(states_dict)
-    return [output_values, output_color]
+        fig, state_dict, saved_start, end = draw_histogram_state_graph(input_df, feature, input_client_df)
+        print(feature, state_dict)
+        output_values[feature] = values_dict[state_dict[feature]]
+    return output_values
 
-def draw_radar_plot(input_features, input_dict):
+def draw_radar_plot(input_features, input_df, input_client_df):
     """ Affiche un radar plot représentant les états du client par variable """
-    r_theta_color = return_radar_plot_values(input_features, input_dict)
-    r_list = [i for i in r_theta_color[0].values()]
-    theta_list = [i for i in r_theta_color[0].keys()]
-    radar_color = r_theta_color[1]
+    r_theta = return_radar_plot_values(input_features, input_df, input_client_df)
+    r_list = [i for i in r_theta.values()]
+    theta_list = [i for i in r_theta.keys()]
 
     fig = go.Figure(data=go.Scatterpolar(r=r_list, theta=theta_list, fill='toself'))
     fig.update_layout(polar=dict(radialaxis=dict(visible=True),),showlegend=False)
 
     st.plotly_chart(fig, use_container_width=True)
 
-def define_clients_range_per_variable(input_data, input_counter, input_feature):
+def define_clients_range_per_variable(input_data, input_counter, input_feature, input_start, input_end):
     """ Fonction dédiée à l'affinement des clients par variable """
     adapt_range = st.selectbox("", ["", "Affiner la gamme de clients"], key=input_counter)
     input_counter += 1
     if(adapt_range != ""):
-        adapt_values = st.slider("Gamme de valeurs acceptées", 0.0, 1.0, (0.0, 1.0), 0.05)
+        adapt_values = st.slider("Gamme de valeurs acceptées", input_start, input_end, (input_start, input_end), round((input_start + input_end) / (2 * 100),3))
         send_box = st.selectbox("", ["", "Affiner !"], key=input_counter)
         input_counter += 1
         if(send_box != ""):
-            send_data = {"DATA" : input_data, "RANGE" : {input_feature : adapt_values}}
-            viz_received = send_to_api("client_global_visualization", "", send_data, "json")
-            variables_states = viz_received["VARIABLE"]["STATE"]
-            features = tuple([i for i in viz_received["VARIABLE"]["IMAGE"].keys()])
-    return input_counter
+            send_data = {"DATA" : input_data.to_dict(), "RANGE" : {input_feature : adapt_values}}
+            received = send_to_api("client_global_visualization", "", send_data, "json")
+            clients_df = pd.DataFrame(received["DATA"])
+            plt.clf()
+            fig, state_dict, start, end = draw_histogram_state_graph(clients_df, input_feature, input_data)
+            st.pyplot(fig)
+            return input_counter, received
+    return input_counter, {}
 
 def import_shap_values(exported_dict):
     """ Import d'une SHAP value via le dictionnaire fourni par la fonction export_shap_values """
@@ -246,12 +249,53 @@ def import_shap_values(exported_dict):
                               feature_names=exported_dict["FEATURE_NAMES"])
     return output
 
+def return_main_state(states_list):
+    """ Renvoie l'état de prédiction principal retrouvé dans la liste donnée en entrée """
+    states_dict = {TP : 0,
+                   TN : 0,
+                   FP : 0,
+                   FN : 0}
+    for state in (states_list):
+        states_dict[state] += 1
+    return max(states_dict, key=states_dict.get)
+
+def draw_histogram_state_graph(input_df, input_feature, input_client_df):
+    """ Dessine un histogramme des états retrouvés pour un échantillon de clients donné """
+    plt.rcParams["figure.figsize"] = [8, 4]
+    client_feature_state = TN
+    
+    fig, ax = plt.subplots()
+
+    N, bins, patches = ax.hist(input_df[input_feature], bins=20, edgecolor='white', alpha=0.6, linewidth=1.5)
+
+    for i in range(len(N)):
+        start = float(str(patches[i]).split(',')[0].split('=')[1][1:])
+        if (i == 0):
+            saved_start = start
+        end = start + float(str(patches[i]).split(',')[2].split('=')[1])
+        feature_state = return_main_state(input_df['PREDICTION_STATE'][(input_df.loc[:, input_feature] >= start) & (input_df.loc[:, input_feature] < end)])
+        patches[i].set_facecolor(colors_states[return_main_state(input_df['PREDICTION_STATE'][(input_df.loc[:, input_feature] >= start) & (input_df.loc[:, input_feature] < end)])])
+        if(input_client_df[input_feature].tolist()[0] != np.nan and input_client_df[input_feature].tolist()[0] >= saved_start and input_client_df[input_feature].tolist()[0] < end):
+            client_feature_state = feature_state
+    if(input_client_df[input_feature].tolist()[0] != np.nan and input_client_df[input_feature].tolist()[0] >= saved_start and input_client_df[input_feature].tolist()[0] < end):
+        plt.axvline(x = input_client_df[input_feature].tolist()[0], color = 'blue', linewidth=3, linestyle = 'dotted')
+    plt.xticks(bins, rotation=-45)
+    return fig, {input_feature : client_feature_state}, saved_start, end
+
 def show_api_results(input_data, input_counter):
     """ Fonction permettant l'affichage des divers résultats de visualisation """
     send_data = {"DATA" : input_data, "RANGE" : {}}
-    viz_received = send_to_api("client_global_visualization", "", send_data, "json")
-    variables_states = viz_received["VARIABLE"]["STATE"]
-    features = tuple([i for i in viz_received["VARIABLE"]["IMAGE"].keys()])
+    received = send_to_api("client_global_visualization", "", send_data, "json")
+    
+    clients_df = pd.DataFrame(received["DATA"])
+    
+    input_df = pd.DataFrame(input_data)
+    
+    input_df.replace(-99999999.0, np.nan, inplace=True)
+    clients_df.replace(-99999999.0, np.nan, inplace=True)
+    
+    non_features = ['TARGET', 'SK_ID_CURR', 'SK_ID_BUREAU', 'SK_ID_PREV', 'index', 'level_0', 'PREDICTION_STATE']
+    features = tuple([f for f in clients_df.columns if f not in non_features])
     features_1 = features[:len(features)//2]
     features_2 = features[len(features)//2:]
 
@@ -263,15 +307,15 @@ def show_api_results(input_data, input_counter):
             col4_1, col4_2 = st.columns((1, 1))
 
             with col4_1:
-                input_counter = draw_decision_bars(features_1, input_counter, viz_received)
+                input_counter = draw_decision_bars(features_1, input_counter, clients_df, input_df)
 
             with col4_2:
-                input_counter = draw_decision_bars(features_2, input_counter, viz_received)
+                input_counter = draw_decision_bars(features_2, input_counter, clients_df, input_df)
 
         elif(selected_decision_visualization == "Radar Plot"):
             col4_3, col4_4, col4_5 = st.columns((0.1,1,0.1))
             with col4_4:
-                draw_radar_plot(list(features), viz_received)
+                draw_radar_plot(list(features), clients_df, input_df)
 
     with col6:
         features = list(features)
@@ -282,37 +326,35 @@ def show_api_results(input_data, input_counter):
         input_counter += 1
         if (selected_feature_1 != ""):
             if (selected_feature_1 == "Interprétabilité locale du modèle"):
-                shap_values = import_shap_values(viz_received["SHAP_CLIENT"])
+                plt.clf()
+                shap_values = import_shap_values(received["SHAP_CLIENT"])
                 st.pyplot(shap.plots.beeswarm(shap_values))
             elif (selected_feature_1 == "Interprétabilité globale du modèle"):
-                shap_values = import_shap_values(viz_received["SHAP_ALL"])
+                plt.clf()
+                shap_values = import_shap_values(received["SHAP_ALL"])
                 st.pyplot(shap.plots.beeswarm(shap_values))
             else:
                 plt.clf()
-                fig1, ax1 = plt.subplots()
-                plt.grid(False)
-                plt.axis('off')
-                plt.imshow(np.reshape(viz_received["VARIABLE"]["IMAGE"][selected_feature_1], (400, 800, 3)))
-                st.pyplot(fig1)
-                input_counter = define_clients_range_per_variable(input_data, input_counter, selected_feature_1)
+                fig, state_dict, start, end = draw_histogram_state_graph(clients_df, selected_feature_1, input_df)
+                st.pyplot(fig)
+                input_counter, received = define_clients_range_per_variable(input_df, input_counter, selected_feature_1, start, end)
 
         selected_feature_2 = st.selectbox("Veuillez séléctionner la distribution de la variable à visualiser :", features, key=input_counter)
         input_counter += 1
         if (selected_feature_2 != ""):
             if (selected_feature_2 == "Interprétabilité locale du modèle"):
-                shap_values = import_shap_values(viz_received["SHAP_CLIENT"])
+                plt.clf()
+                shap_values = import_shap_values(received["SHAP_CLIENT"])
                 st.pyplot(shap.plots.beeswarm(shap_values))
             elif (selected_feature_2 == "Interprétabilité globale du modèle"):
-                shap_values = import_shap_values(viz_received["SHAP_ALL"])
+                plt.clf()
+                shap_values = import_shap_values(received["SHAP_ALL"])
                 st.pyplot(shap.plots.beeswarm(shap_values))
             else:
                 plt.clf()
-                fig2, ax2 = plt.subplots()
-                plt.grid(False)
-                plt.axis('off')
-                plt.imshow(np.reshape(viz_received["VARIABLE"]["IMAGE"][selected_feature_2], (400, 800, 3)))
-                st.pyplot(fig2)
-                input_counter = define_clients_range_per_variable(input_data, input_counter, selected_feature_2)
+                fig, state_dict, start, end = draw_histogram_state_graph(clients_df, selected_feature_2, input_df)
+                st.pyplot(fig)
+                input_counter, received = define_clients_range_per_variable(input_df, input_counter, selected_feature_2, start, end)
     return input_counter
 
 def display_main_menu():
@@ -397,11 +439,23 @@ def general_stats():
     general_stats_df = pd.DataFrame(send_to_api("model_stats_global", "", {}, "json"))
     st.dataframe(general_stats_df)
 
+def confusion_matrix_displayer():
+    """ Affiche une matrice de confusion """
+    true_pred_dict = send_to_api("model_stats_confusion_matrix", "", {}, "json")
+    true_y = true_pred_dict["TRUE_Y"]
+    pred_y = true_pred_dict["PRED_Y"]
+    labels = true_pred_dict["CLASSES"]
+    
+    fig, ax = plt.subplots()
+    cm = confusion_matrix(true_y, pred_y, labels=labels)
+    sns.heatmap(cm, annot=True, fmt='d')
+    st.pyplot(fig)
+
 def model_stats():
     """ Page dédiée à l'affichage des statistiques du modèle """
     st.title("Modèle de Simulation")
     # Sélectionnez est présent afin d'avoir un placeholder le temps de sélectionner une vraie statistique sélectionnée
-    model_stats_list = ('<Sélectionnez>', 'Statistiques Générales', 'Courbe ROC', "Interprétabilité Globale (Bar)", "Interprétabilité Globale (Beeswarm)")
+    model_stats_list = ("<Sélectionnez>", "Statistiques Générales", "Courbe ROC", "Matrice de confusion" , "Interprétabilité Globale (Bar)", "Interprétabilité Globale (Beeswarm)")
 
     displayed_model_stat = st.selectbox('Choisissez la statistique du modèle à visualiser', model_stats_list)
 
@@ -409,9 +463,11 @@ def model_stats():
         general_stats()
     elif (displayed_model_stat == model_stats_list[2]): # Courbe ROC
         roc_plot()
-    elif (displayed_model_stat == model_stats_list[3]): # Interprétabilité Globale (Bar)
+    elif (displayed_model_stat == model_stats_list[3]): # Matrice de confusion
+        confusion_matrix_displayer()
+    elif (displayed_model_stat == model_stats_list[4]): # Interprétabilité Globale (Bar)
         shap_global_plot_bar()
-    elif (displayed_model_stat == model_stats_list[4]): # Interprétabilité Globale (Beeswarm)
+    elif (displayed_model_stat == model_stats_list[5]): # Interprétabilité Globale (Beeswarm)
         shap_global_plot_beeswarm()
 
 def contact_us():

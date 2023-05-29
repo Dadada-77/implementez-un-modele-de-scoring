@@ -6,7 +6,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 
 from pydantic import BaseModel
 from simulation_tools import simulate_client
-from visualization_tools import visualize_client_global, roc_model_stats, shap_global_model_stats, return_shap_values, return_global_stats
+from visualization_tools import visualize_client_global, roc_model_stats, shap_global_model_stats, return_shap_values, return_global_stats, return_confusion_matrix_data
 from generic_tools import return_ids_list, return_data_per_id
 
 class User_input(BaseModel):
@@ -30,6 +30,10 @@ def simulate(input:User_input):
 @app.post("/client_global_visualization")
 def visualize(input:User_input):
     return visualize_client_global(input.data)
+
+@app.post("/model_stats_confusion_matrix")
+def visualize(input:User_input):
+    return return_confusion_matrix_data()
 
 @app.post("/model_stats_global")
 def return_stats(input:User_input):

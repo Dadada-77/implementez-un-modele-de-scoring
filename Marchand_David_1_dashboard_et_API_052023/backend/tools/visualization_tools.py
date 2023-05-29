@@ -11,7 +11,7 @@ from tqdm.notebook import tqdm
 import plotly.graph_objects as go
 import plotly.io as pio
 
-from sklearn.metrics import roc_auc_score, roc_curve
+from sklearn.metrics import roc_auc_score, roc_curve, confusion_matrix, ConfusionMatrixDisplay
 from sklearn.model_selection import RepeatedKFold
 from imblearn.under_sampling import RandomUnderSampler
 
@@ -254,16 +254,6 @@ def return_row_predict_state(true_y, pred_y):
             output.append(np.nan)
     return output
 
-def return_main_state(states_list):
-    """ Renvoie l'état de prédiction principal retrouvé dans la liste donnée en entrée """
-    states_dict = {TP : 0,
-                   TN : 0,
-                   FP : 0,
-                   FN : 0}
-    for state in (states_list):
-        states_dict[state] += 1
-    return max(states_dict, key=states_dict.get)
-
 def export_shap_values(input_shap_value):
     """ Export d'une SHAP Value dans un format accepté par FastAPI """
     output_dict = {}
@@ -278,22 +268,38 @@ def return_shap_values():
     shap_global_values = pickle.load(open(MODELS_PATH + "final_model_shap_values.pkl", "rb"))
     return export_shap_values(shap_global_values)
 
-def visualize_client_global(input_dict):
-    """ Fonction renvoyant une série de graphes basés sur les états de prédictions ainsi que les SHAP Values """
-    trimmed_variable_dict = input_dict["RANGE"]
-    input_dict = input_dict["DATA"]
-    clientdf = pd.DataFrame(input_dict)
+def return_confusion_matrix_data():
+    """ Retourne les données nécessaires à la création d'un matrice de confusion """
+    output_dict = {"TRUE_Y" : "", "PRED_Y" : "", "CLASSES" : ""}
+
     testdf = import_data_nan(DATA_PATH + "test_data.csv")
-
-    clientdf.replace(-99999999, np.nan, inplace=True)
-
-    non_features = ['TARGET','SK_ID_CURR','SK_ID_BUREAU','SK_ID_PREV','index', 'level_0']
-    features = [f for f in clientdf.columns if f not in non_features]
-    target = "TARGET"
-
+    
     model = pickle.load(open(MODELS_PATH + "final_model.pkl", "rb"))
     t = 0.1
+    
+    non_features = ['TARGET', 'SK_ID_CURR', 'SK_ID_BUREAU', 'SK_ID_PREV', 'index', 'level_0']
+    features = [f for f in testdf.columns if f not in non_features]
+    target = "TARGET"
+    
+    probs = model.predict_proba(testdf[features])
+    probs = probs[:, 1]
+    testdf["PREDICTION"] = to_labels(probs, t)
+    
+    output_dict["TRUE_Y"] = testdf[target].tolist()
+    output_dict["PRED_Y"] = testdf["PREDICTION"].tolist()
+    output_dict["CLASSES"] = model.classes_.tolist()
+    
+    return output_dict
 
+def visualize_client_global(input_dict):
+    """ Fonction renvoyant les données nécessaires pour l'établissement de graphes d'états """
+    trimmed_variable_dict = input_dict["RANGE"]
+    input_dict = input_dict["DATA"]
+    output_dict = {"DATA" : "", "SHAP_ALL" : "", "SHAP_LOCAL" : "", "VARIABLE" : {}}
+    
+    clientdf = pd.DataFrame(input_dict)
+    testdf = import_data_nan(DATA_PATH + "test_data.csv")
+    
     if(trimmed_variable_dict != {}):
         target_variable = list(trimmed_variable_dict.keys())[0]
         min_value = trimmed_variable_dict[target_variable][0]
@@ -301,6 +307,13 @@ def visualize_client_global(input_dict):
         testdf = testdf[(testdf.loc[:, target_variable] > min_value) & (testdf.loc[:, target_variable] < max_value)]
         testdf.drop(["level_0"], axis=1, inplace=True)
         testdf.reset_index(inplace=True)
+        
+    model = pickle.load(open(MODELS_PATH + "final_model.pkl", "rb"))
+    t = 0.1
+    
+    non_features = ['TARGET', 'SK_ID_CURR', 'SK_ID_BUREAU', 'SK_ID_PREV', 'index', 'level_0']
+    features = [f for f in testdf.columns if f not in non_features]
+    target = "TARGET"
 
     probs = model.predict_proba(testdf[features])
     probs = probs[:, 1]
@@ -315,40 +328,10 @@ def visualize_client_global(input_dict):
 
     non_plotted_feats = ['index', 'level_0', 'PREDICTION_STATE']
     plotted_feats = [f for f in unsmpled_df.columns if f not in non_plotted_feats]
-
-    plt.rcParams["figure.figsize"] = [8, 4]
-    output_dict = {"VARIABLE" : {"IMAGE" : {}, "STATE" : {}}, "SHAP_ALL" : "", "SHAP_CLIENT" : ""}
-
-    for feature in (plotted_feats):
-        client_feature_state = TN
-        fig, ax = plt.subplots()
-
-        N, bins, patches = ax.hist(unsmpled_df[feature], bins=20, edgecolor='white', alpha=0.6, linewidth=1.5)
-
-        for i in range(len(N)):
-            start = float(str(patches[i]).split(',')[0].split('=')[1][1:])
-            if (i == 0):
-                saved_start = start
-            end = start + float(str(patches[i]).split(',')[2].split('=')[1])
-            feature_state = return_main_state(unsmpled_df['PREDICTION_STATE'][(unsmpled_df.loc[:, feature] >= start) & (unsmpled_df.loc[:, feature] < end)])
-            patches[i].set_facecolor(colors_states[return_main_state(unsmpled_df['PREDICTION_STATE'][(unsmpled_df.loc[:, feature] >= start) & (unsmpled_df.loc[:, feature] < end)])])
-            if(clientdf[feature].values[0] >= start and clientdf[feature].values[0] < end):
-                client_feature_state = feature_state
-        if(clientdf[feature].values[0] != np.nan):
-            plt.axvline(x = clientdf[feature].values[0], color = 'blue', linewidth=3, linestyle = 'dotted')
-        plt.xticks(bins, rotation=-45)
-        fig.tight_layout()
-        fig.canvas.draw()
-        image_from_plot = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
-        image_from_plot = image_from_plot.reshape(fig.canvas.get_width_height()[::-1] + (3,))
-        output_dict["VARIABLE"]["IMAGE"][feature] = image_from_plot.tolist()
-        output_dict["VARIABLE"]["STATE"][feature] = client_feature_state
-        plt.close(fig)
-        plt.clf()
-
-    # Prévention du Out of range obtenu sur FastAPI
+    
+    unsmpled_df.replace(np.nan, -99999999, inplace=True)
     clientdf.replace(np.nan, -99999999, inplace=True)
-
+    
     # Retour des SHAP values locales
     shap_explainer = pickle.load(open(MODELS_PATH + "final_model_shap_explainer.pkl", "rb"))
     shap_local_values = shap_explainer(clientdf[features])
@@ -357,7 +340,9 @@ def visualize_client_global(input_dict):
     # Retour des SHAP values globales
     shap_global_values = pickle.load(open(MODELS_PATH + "final_model_shap_values.pkl", "rb"))
     output_dict["SHAP_ALL"] = export_shap_values(shap_global_values)
-
+    
+    output_dict["DATA"] = unsmpled_df.to_dict()
+    
     # Nettoyage !
     del clientdf
     del testdf
@@ -365,5 +350,4 @@ def visualize_client_global(input_dict):
 
     gc.collect()
 
-    # Renvoi de la sortie
     return output_dict
