@@ -8,6 +8,7 @@ MODELS_PATH = "./ressources/models/"
 DATA_PATH = "./ressources/data/"
 
 def simulate_client(input_dict):
+    """ Retourne la prédiction du modèle retenu pour un dataframe d'entrée """
     output_dict = {}
     clientdf = pd.DataFrame(input_dict)
 
@@ -15,8 +16,8 @@ def simulate_client(input_dict):
     features = [f for f in clientdf.columns if f not in non_features]
     target = "TARGET"
 
-    model = pickle.load(open(MODELS_PATH + "final_model_cpu.pkl", "rb"))
-    t = 0.095
+    model = pickle.load(open(MODELS_PATH + "final_model.pkl", "rb"))
+    t = 0.1
 
     probs = model.predict_proba(clientdf[features])
     probs = probs[:, 1]

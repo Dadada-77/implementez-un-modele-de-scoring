@@ -16,7 +16,7 @@ def test_simulate_client(input_dict):
     clientdf = pd.DataFrame(input_dict)
     features = [f for f in clientdf.columns if f not in NON_FEATURES]
 
-    model = pickle.load(open(MODELS_PATH + "final_model_cpu.pkl", "rb"))
+    model = pickle.load(open(MODELS_PATH + "final_model.pkl", "rb"))
     t = float(np.random.uniform(MIN, MAX))
 
     probs = model.predict_proba(clientdf[features])

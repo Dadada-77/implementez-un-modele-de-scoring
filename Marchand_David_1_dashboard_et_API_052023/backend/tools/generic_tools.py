@@ -6,11 +6,13 @@ DATA_PATH = "./ressources/data/"
 ID_COLUMN_NAME = "SK_ID_CURR"
 
 def return_ids_list(df_name):
+    """ Retourne la liste des identifiants du fichier demandé en entrée """
     df = pd.read_csv(DATA_PATH + df_name + ".csv")
     output_ids = sorted(df[ID_COLUMN_NAME].unique().tolist())
     output_ids.insert(0, "")
     return output_ids
 
 def return_data_per_id(df_name, row_id):
+    """ Retourne la ligne demandée du fichier saisi en entrée """
     df = pd.read_csv(DATA_PATH + df_name + ".csv")
     return df[df.loc[:, ID_COLUMN_NAME] == row_id[ID_COLUMN_NAME]].to_dict()

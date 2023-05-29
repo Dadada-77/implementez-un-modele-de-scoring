@@ -1,0 +1,15 @@
+artifact_uri: file:///home/david/Documents/OpenClassrooms/implementez-un-modele-de-scoring/Marchand_David_2_dossier_code_052023/mlruns/0/ccced4d1290a4f2cb4c21ffc445e9396/artifacts
+end_time: 1685301292787
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: ccced4d1290a4f2cb4c21ffc445e9396
+run_name: lyrical-koi-757
+run_uuid: ccced4d1290a4f2cb4c21ffc445e9396
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1685291030401
+status: 3
+tags: []
+user_id: david

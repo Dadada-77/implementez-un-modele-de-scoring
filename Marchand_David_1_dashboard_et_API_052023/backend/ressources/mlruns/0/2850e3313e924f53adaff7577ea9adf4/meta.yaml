@@ -1,0 +1,15 @@
+artifact_uri: file:///home/david/Documents/OpenClassrooms/implementez-un-modele-de-scoring/Marchand_David_2_dossier_code_052023/mlruns/0/2850e3313e924f53adaff7577ea9adf4/artifacts
+end_time: 1685301292981
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: 2850e3313e924f53adaff7577ea9adf4
+run_name: masked-shrimp-646
+run_uuid: 2850e3313e924f53adaff7577ea9adf4
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1685291030401
+status: 4
+tags: []
+user_id: david

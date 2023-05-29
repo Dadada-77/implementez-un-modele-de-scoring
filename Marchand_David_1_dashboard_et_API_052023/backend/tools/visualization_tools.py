@@ -1,77 +1,88 @@
-import os, sys
-import io
-import re
-from bytesbufio import BytesBufferIO as BytesIO
-import base64
+import os
+import pickle
+import gc
+
 import numpy as np
 import pandas as pd
-import pickle
-import random
-import string
+
 import xgboost as xgb
 from tqdm.notebook import tqdm
+
 import plotly.graph_objects as go
 import plotly.io as pio
-import plotly.tools as tls
-import shap
 
-MODELS_PATH = "./ressources/models/"
-DATA_PATH = "./ressources/data/"
-
-from sklearn.metrics import fbeta_score, RocCurveDisplay, roc_auc_score, roc_curve
+from sklearn.metrics import roc_auc_score, roc_curve
 from sklearn.model_selection import RepeatedKFold
 from imblearn.under_sampling import RandomUnderSampler
 
-from starlette.responses import StreamingResponse
-
-import gc
+import mlflow
 
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-from simulation_tools import simulate_client
+# Constantes dédiées au chargement des chemins
+
+MLFLOW_PATH = "./ressources/mlruns/"
+MODELS_PATH = "./ressources/models/"
+DATA_PATH = "./ressources/data/"
+
+# Saisir ici l'identifiant du modèle retenu dans MLFlow
+
+FINAL_MODEL_EXP_ID = "6352986c44714f79b6d360e1e5a84ae6"
+
+# Constantes dédiées à Matplotlib
 
 SMALL_SIZE = 14
 MEDIUM_SIZE = 18
 BIGGER_SIZE = 28
 
-plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
-plt.rc('axes', titlesize=SMALL_SIZE)     # fontsize of the axes title
-plt.rc('axes', labelsize=MEDIUM_SIZE)    # fontsize of the x and y labels
-plt.rc('xtick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
-plt.rc('ytick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
-plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
-plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
+plt.rc('font', size=SMALL_SIZE)
+plt.rc('axes', titlesize=SMALL_SIZE)
+plt.rc('axes', labelsize=MEDIUM_SIZE)
+plt.rc('xtick', labelsize=SMALL_SIZE)
+plt.rc('ytick', labelsize=SMALL_SIZE)
+plt.rc('legend', fontsize=SMALL_SIZE)
+plt.rc('figure', titlesize=BIGGER_SIZE)
+
+# Constantes prévues pour le traitement de l'état de la prédiction
 
 TP, TN, FP, FN = ('tp', 'tn', 'fp', 'fn')
 colors_states = {TP : '#68DC8F', TN : '#D66577', FP : '#E9DC8E', FN : '#D6AA77'}
 
+# --------------------- PARTIE FONCTIONS -------------------------- #
+
 def to_labels(pos_probs, threshold):
+    """ Permet de renvoyer les prédictions en format binaire (plus précisément en entier) """
     return (pos_probs >= threshold).astype('int')
 
-def general_model_stats():
-    # Load model
-    model = pickle.load(open(MODELS_PATH + "final_model_cpu.pkl", "rb"))
-
 def shap_global_model_stats():
+    """ Renvoie les SHAP Values précalculées """
     return pickle.load(open(MODELS_PATH + "final_model_shap_values.pkl", "rb"))
 
-def import_data():
+def import_data_nan(input_path):
+    """ Renvoie un DataFrame avec des valeurs manquantes sous la forme np.nan """
     OUTLIER_VALUE = -99999999
 
-    output_train_df = pd.read_csv(DATA_PATH + 'train_data.csv')
-    output_test_df = pd.read_csv(DATA_PATH + 'test_data.csv')
+    output_df = pd.read_csv(input_path)
+    output_df.replace(OUTLIER_VALUE, np.nan, inplace=True)
 
-    output_train_df.replace(np.nan, OUTLIER_VALUE, inplace=True)
-    output_test_df.replace(np.nan, OUTLIER_VALUE, inplace=True)
+    return output_df
 
-    return output_train_df, output_test_df
+def import_data_outlier(input_path):
+    """ Renvoie un DataFrame avec des valeurs manquantes sous la forme OUTLIER_VALUE """
+    OUTLIER_VALUE = -99999999
+
+    output_df = pd.read_csv(input_path)
+    output_df.replace(np.nan, OUTLIER_VALUE, inplace=True)
+
+    return output_df
 
 def roc_pr_compute():
+    """ Calcul des résultats nécessaires à la création d'un graphe de type ROC / PR AUC """
     if(os.path.exists(MODELS_PATH + "precomputed_roc.pkl") == False):
-        train_df = pd.read_csv(DATA_PATH + "train_data.csv")
-        test_df = pd.read_csv(DATA_PATH + "test_data.csv")
+        train_df = import_data_outlier(DATA_PATH + "train_data.csv")
+        test_df = import_data_outlier(DATA_PATH + "test_data.csv")
 
         non_features = ['TARGET','SK_ID_CURR','SK_ID_BUREAU','SK_ID_PREV','index', 'level_0']
         features = [f for f in train_df.columns if f not in non_features]
@@ -129,6 +140,7 @@ def roc_pr_compute():
     return results
 
 def roc_model_stats():
+    """ Création d'un graphe ROC AUC """
     results = roc_pr_compute()
 
     kind = 'val'
@@ -208,11 +220,26 @@ def roc_model_stats():
     html_fig = pio.to_html(fig)
     return html_fig
 
-def precision_recall_model_stats():
-    # Results sent are the same, they will differ in how data will be displayed !
-    results = roc_pr_compute()
+def return_global_stats():
+    """ Renvoie les statistiques du modèle final stocké dans MLFlow """
+    # Je vais charger les métriques stockées par MLFlow
+    mlflow.set_tracking_uri(MLFLOW_PATH)
+    mlruns = mlflow.search_runs()
+    final_model_logs = mlruns[mlruns.loc[:, "run_id"] == FINAL_MODEL_EXP_ID]
+    final_model_stats_df = pd.DataFrame({"Accuracy" : final_model_logs["metrics.Accuracy"].values[0],
+                                         "FBeta Score" : final_model_logs["metrics.Best FBeta Score"].values[0],
+                                         "Training time" : final_model_logs["metrics.Entraînement du Fine Tuned XGBoost model"].values[0],
+                                         "Prediction time" : final_model_logs["metrics.Prédiction du fine_tuned_XGBoost model"].values[0],
+                                         "Business Score" : final_model_logs["metrics.Business Scoring value"].values[0],
+                                         "ROC AUC" : final_model_logs["metrics.ROC AUC"].values[0],
+                                         "Precision Recall AUC" : final_model_logs["metrics.Precision Recall Curve AUC"].values[0],
+                                         "Macro AVG F1-Score" : final_model_logs["metrics.Macro AVG F1-Score"].values[0],
+                                         "Macro AVG Precision" : final_model_logs["metrics.Macro AVG Precision"].values[0],
+                                         "Macro AVG Recall" : final_model_logs["metrics.Macro AVG Recall"].values[0]}, index=[0])
+    return final_model_stats_df.to_dict()
 
 def return_row_predict_state(true_y, pred_y):
+    """ Renvoie une liste composée des états de prédiction (Vrais / Faux Positifs / Négatifs) """
     output = []
     for i in range (len(true_y)):
         if (true_y[i] == pred_y[i] and true_y[i] == 0):
@@ -228,6 +255,7 @@ def return_row_predict_state(true_y, pred_y):
     return output
 
 def return_main_state(states_list):
+    """ Renvoie l'état de prédiction principal retrouvé dans la liste donnée en entrée """
     states_dict = {TP : 0,
                    TN : 0,
                    FP : 0,
@@ -236,21 +264,35 @@ def return_main_state(states_list):
         states_dict[state] += 1
     return max(states_dict, key=states_dict.get)
 
+def export_shap_values(input_shap_value):
+    """ Export d'une SHAP Value dans un format accepté par FastAPI """
+    output_dict = {}
+    output_dict["VALUES"] = input_shap_value.values.tolist()
+    output_dict["BASE_VALUES"] = input_shap_value.base_values.tolist()
+    output_dict["DATA"] = input_shap_value.data.tolist()
+    output_dict["FEATURE_NAMES"] = input_shap_value.feature_names
+    return output_dict
+
+def return_shap_values():
+    """ Renvoie les SHAP Values globales """
+    shap_global_values = pickle.load(open(MODELS_PATH + "final_model_shap_values.pkl", "rb"))
+    return export_shap_values(shap_global_values)
+
 def visualize_client_global(input_dict):
+    """ Fonction renvoyant une série de graphes basés sur les états de prédictions ainsi que les SHAP Values """
     trimmed_variable_dict = input_dict["RANGE"]
     input_dict = input_dict["DATA"]
     clientdf = pd.DataFrame(input_dict)
-    testdf = pd.read_csv(DATA_PATH + "test_data.csv")
+    testdf = import_data_nan(DATA_PATH + "test_data.csv")
 
-    clientdf.replace(np.nan, -99999999)
-    testdf.replace(np.nan, -99999999)
+    clientdf.replace(-99999999, np.nan, inplace=True)
 
     non_features = ['TARGET','SK_ID_CURR','SK_ID_BUREAU','SK_ID_PREV','index', 'level_0']
     features = [f for f in clientdf.columns if f not in non_features]
     target = "TARGET"
 
-    model = pickle.load(open(MODELS_PATH + "final_model_cpu.pkl", "rb"))
-    t = 0.095
+    model = pickle.load(open(MODELS_PATH + "final_model.pkl", "rb"))
+    t = 0.1
 
     if(trimmed_variable_dict != {}):
         target_variable = list(trimmed_variable_dict.keys())[0]
@@ -272,7 +314,7 @@ def visualize_client_global(input_dict):
     unsmpled_df.reset_index(inplace=True)
 
     non_plotted_feats = ['index', 'level_0', 'PREDICTION_STATE']
-    plotted_feats = feats = [f for f in unsmpled_df.columns if f not in non_plotted_feats]
+    plotted_feats = [f for f in unsmpled_df.columns if f not in non_plotted_feats]
 
     plt.rcParams["figure.figsize"] = [8, 4]
     output_dict = {"VARIABLE" : {"IMAGE" : {}, "STATE" : {}}, "SHAP_ALL" : "", "SHAP_CLIENT" : ""}
@@ -292,7 +334,8 @@ def visualize_client_global(input_dict):
             patches[i].set_facecolor(colors_states[return_main_state(unsmpled_df['PREDICTION_STATE'][(unsmpled_df.loc[:, feature] >= start) & (unsmpled_df.loc[:, feature] < end)])])
             if(clientdf[feature].values[0] >= start and clientdf[feature].values[0] < end):
                 client_feature_state = feature_state
-        plt.axvline(x = clientdf[feature].values[0], color = 'blue', linewidth=3, linestyle = 'dotted')
+        if(clientdf[feature].values[0] != np.nan):
+            plt.axvline(x = clientdf[feature].values[0], color = 'blue', linewidth=3, linestyle = 'dotted')
         plt.xticks(bins, rotation=-45)
         fig.tight_layout()
         fig.canvas.draw()
@@ -303,28 +346,24 @@ def visualize_client_global(input_dict):
         plt.close(fig)
         plt.clf()
 
-    # Return global SHAP values
-    shap_global_values = pickle.load(open(MODELS_PATH + "final_model_shap_values.pkl", "rb"))
+    # Prévention du Out of range obtenu sur FastAPI
+    clientdf.replace(np.nan, -99999999, inplace=True)
 
-    """
-    # Return local SHAP values
-    shap_explainer = pickle.load(open(MODELS_PATH + "final_model_shap_values.pkl", "rb"))
+    # Retour des SHAP values locales
+    shap_explainer = pickle.load(open(MODELS_PATH + "final_model_shap_explainer.pkl", "rb"))
     shap_local_values = shap_explainer(clientdf[features])
+    output_dict["SHAP_CLIENT"] = export_shap_values(shap_local_values)
 
-    output_dict["SHAP_CLIENT"] = shap_local_values
-    output_dict["SHAP_ALL"] = shap_global_values.tolist()
-    """
+    # Retour des SHAP values globales
+    shap_global_values = pickle.load(open(MODELS_PATH + "final_model_shap_values.pkl", "rb"))
+    output_dict["SHAP_ALL"] = export_shap_values(shap_global_values)
 
-    # Cleaning everything
-
+    # Nettoyage !
     del clientdf
     del testdf
     del unsmpled_df
 
     gc.collect()
 
-    # Time to return our data !
-
-    print(output_dict)
-
+    # Renvoi de la sortie
     return output_dict

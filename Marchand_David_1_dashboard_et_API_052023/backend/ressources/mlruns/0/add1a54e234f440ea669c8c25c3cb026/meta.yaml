@@ -1,0 +1,15 @@
+artifact_uri: file:///home/david/Documents/OpenClassrooms/implementez-un-modele-de-scoring/Marchand_David_2_dossier_code_052023/mlruns/0/add1a54e234f440ea669c8c25c3cb026/artifacts
+end_time: 1685306410581
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: add1a54e234f440ea669c8c25c3cb026
+run_name: secretive-stoat-201
+run_uuid: add1a54e234f440ea669c8c25c3cb026
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1685306409056
+status: 3
+tags: []
+user_id: david

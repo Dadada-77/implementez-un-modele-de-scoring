@@ -6,7 +6,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 
 from pydantic import BaseModel
 from simulation_tools import simulate_client
-from visualization_tools import visualize_client_global, roc_model_stats, shap_global_model_stats
+from visualization_tools import visualize_client_global, roc_model_stats, shap_global_model_stats, return_shap_values, return_global_stats
 from generic_tools import return_ids_list, return_data_per_id
 
 class User_input(BaseModel):
@@ -33,7 +33,11 @@ def visualize(input:User_input):
 
 @app.post("/model_stats_global")
 def return_stats(input:User_input):
-    return "Statistiques Globales du Modèle"
+    return return_global_stats()
+
+@app.post("/model_stats_shap")
+def return_stats(input:User_input):
+    return return_shap_values()
 
 @app.post("/model_stats_roc", response_class=HTMLResponse)
 def return_stats(input:User_input):

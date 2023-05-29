@@ -1,0 +1,31 @@
+# docker-compose.yml
+
+services:
+  backend:
+    build: backend
+    image: dadada77/oc_p7-backend:latest
+    ports:
+      - "8000:8000"
+    volumes:
+      - ${WEBAPP_STORAGE_HOME}/backend:/app/backend
+    networks:
+      - project_network
+    extra_hosts:
+      - host.docker.internal:host-gateway
+
+  frontend:
+    build: frontend
+    image: dadada77/oc_p7-frontend:latest
+    ports:
+      - "8501:8501"
+    volumes:
+      - ${WEBAPP_STORAGE_HOME}/frontend:/app/frontend
+    depends_on:
+    - backend
+    networks:
+      - project_network
+    extra_hosts:
+      - host.docker.internal:host-gateway
+
+networks:
+  project_network:

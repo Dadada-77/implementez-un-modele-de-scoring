@@ -1,0 +1,32 @@
+artifact_path: best_estimator
+flavors:
+  python_function:
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.sklearn
+    model_path: model.pkl
+    predict_fn: predict
+    python_version: 3.9.16
+  sklearn:
+    code: null
+    pickled_model: model.pkl
+    serialization_format: cloudpickle
+    sklearn_version: 1.2.2
+mlflow_version: 2.3.2
+model_uuid: 1bc20bd614f349709969d9360f355296
+run_id: bd6d02134e554e61aadea79e69bb38dd
+signature:
+  inputs: '[{"name": "BURO_AMT_CREDIT_MAX_OVERDUE_MEAN", "type": "double"}, {"name":
+    "BURO_AMT_CREDIT_SUM_MEAN", "type": "double"}, {"name": "BURO_DAYS_CREDIT_ENDDATE_MAX",
+    "type": "double"}, {"name": "BURO_DAYS_CREDIT_MAX", "type": "double"}, {"name":
+    "DAYS_BIRTH", "type": "double"}, {"name": "DAYS_EMPLOYED", "type": "double"},
+    {"name": "DAYS_ID_PUBLISH", "type": "long"}, {"name": "DAYS_LAST_PHONE_CHANGE",
+    "type": "double"}, {"name": "DAYS_REGISTRATION", "type": "double"}, {"name": "EXT_SOURCE_1",
+    "type": "double"}, {"name": "EXT_SOURCE_2", "type": "double"}, {"name": "EXT_SOURCE_3",
+    "type": "double"}, {"name": "OWN_CAR_AGE", "type": "double"}, {"name": "AMT_CREDIT_TO_ANNUITY_RATIO",
+    "type": "double"}, {"name": "AMT_GOODS_PRICE_TO_ANNUITY_RATIO", "type": "double"},
+    {"name": "AMT_CREDIT_GOODS_PRICE_DIFF", "type": "double"}, {"name": "GOODS_PRICE_FAIL_RATIO",
+    "type": "double"}, {"name": "CREDIT_FAIL_RATIO", "type": "double"}]'
+  outputs: '[{"type": "tensor", "tensor-spec": {"dtype": "int64", "shape": [-1]}}]'
+utc_time_created: '2023-05-28 16:00:59.247903'
